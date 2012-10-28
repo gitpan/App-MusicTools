@@ -1,0 +1,54 @@
+{
+   "abstract" : "command line utilities for music composition and analysis",
+   "author" : [
+      "Jeremy Mates <jmates@cpan.org>"
+   ],
+   "dynamic_config" : 1,
+   "generated_by" : "ExtUtils::MakeMaker version 6.62, CPAN::Meta::Converter version 2.112150",
+   "license" : [
+      "perl_5"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : "2"
+   },
+   "name" : "App-MusicTools",
+   "no_index" : {
+      "directory" : [
+         "t",
+         "inc"
+      ]
+   },
+   "prereqs" : {
+      "build" : {
+         "requires" : {
+            "ExtUtils::MakeMaker" : 0
+         }
+      },
+      "configure" : {
+         "requires" : {
+            "ExtUtils::MakeMaker" : 0
+         }
+      },
+      "runtime" : {
+         "requires" : {
+            "Music::AtonalUtil" : 0,
+            "Music::Chord::Note" : 0,
+            "Music::Chord::Positions" : 0,
+            "Music::LilyPondUtil" : 0,
+            "Music::Tension" : 0
+         }
+      }
+   },
+   "release_status" : "stable",
+   "resources" : {
+      "homepage" : "http://github.com/thrig/App-MusicTools",
+      "license" : [
+         "http://dev.perl.org/licenses/"
+      ],
+      "repository" : {
+         "url" : "http://github.com/thrig/App-MusicTools"
+      }
+   },
+   "version" : "0.01"
+}
