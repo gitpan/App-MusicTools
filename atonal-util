@@ -6,20 +6,30 @@
 # ZSH completion script available in the zsh-compdef directory of the
 # App::MusicTools distribution.
 
+# XXX add --tension to show Cope tension values (off by default
+# otherwise)
+
+# XXX improve emit_pitch_set (returns a string, so caller can then do
+# what it will -- or have LilyPondUtil sub that knows how to format a
+# pitch set? (among other possible code cleanups/simplifications)
+
 use strict;
 use warnings;
 
-use Getopt::Long qw/GetOptions GetOptionsFromArray/;
-use List::MoreUtils qw/all uniq/;
+use Getopt::Long qw/GetOptionsFromArray/;
+use List::MoreUtils qw/all any/;
 use Music::AtonalUtil    ();
 use Music::LilyPondUtil  ();
 use Music::Tension::Cope ();
+use Parse::Range qw/parse_range/;
+use Scalar::Util qw/looks_like_number/;
 
 my %modes = (
   basic                  => \&basic,
   circular_permute       => \&circular_permute,
   complement             => \&complement,
   equivs                 => \&equivs,
+  findall                => \&findall,
   findin                 => \&findin,
   forte2pcs              => \&forte2pcs,
   fnums                  => \&fnums,
@@ -63,7 +73,7 @@ GetOptionsFromArray(
   'help'           => \&print_help,
   'listmodes'      => sub { print "$_\n" for sort keys %modes; exit 0 },
   'scaledegrees=s' => \my $scale_degrees,
-) || print_help();
+) or print_help();
 $scale_degrees //= Music::AtonalUtil->new->scale_degrees();
 my $mode = shift;
 
@@ -72,10 +82,12 @@ print_help() if !defined $mode || !exists $modes{$mode};
 my $atu = Music::AtonalUtil->new( DEG_IN_SCALE => $scale_degrees );
 my $lyu = Music::LilyPondUtil->new(
   chrome => ( $Flag_Flat ? 'flats' : 'sharps' ),
-  mode => 'relative'
+  keep_state => 0,
+  mode       => 'relative'
 );
+my $tension = Music::Tension::Cope->new();
 
-$modes{$mode}->( $atu, @ARGV );
+$modes{$mode}->(@ARGV);
 exit 0;
 
 ########################################################################
@@ -83,7 +95,7 @@ exit 0;
 # SUBROUTINES
 
 sub args2pitchset {
-  my ( $atu, @args ) = @_;
+  my (@args) = @_;
   my $dis = $atu->scale_degrees;
 
   if ( !@args or ( @args == 1 and $args[0] eq '-' ) ) {
@@ -93,7 +105,7 @@ sub args2pitchset {
   my $pitch_set;
   if ( $args[0] =~ m/\d-/ ) {
     $pitch_set = $atu->forte2pcs( $args[0] );
-    die "unknown Forte Number\n" if !@$pitch_set;
+    die "unknown Forte Number '$args[0]'\n" if !defined $pitch_set;
   } else {
     for my $arg (@args) {
       for my $p ( $arg =~ /([\d\w]+)/g ) {
@@ -110,42 +122,45 @@ sub args2pitchset {
 }
 
 sub basic {
-  my ( $atu, @args ) = @_;
+  my (@args) = @_;
   GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
   $lyu->chrome('flats') if $Flag_Flat;
 
-  emit_pitch_set( $atu, $atu->prime_form( args2pitchset( $atu, @args ) ) );
+  my $pset = args2pitchset(@args);
+
+  emit_pitch_set( $atu->prime_form($pset), rs => ',' );
   emit_pitch_set(
-    $atu,
-    scalar $atu->interval_class_content( args2pitchset( $atu, @args ) ),
-    lyflag => 0
+    scalar $atu->interval_class_content($pset),
+    lyflag => 0,
+    rs     => '',
   );
-  my $forte = $atu->pcs2forte( args2pitchset( $atu, @args ) );
-  print $forte, "\n" if $forte;
+
+  my $forte = $atu->pcs2forte($pset) // '';
+  my ( $t_avg, $t_min, $t_max, $t_ref ) = $tension->vertical($pset);
+  printf "%.03f  %.03f  %.03f\t%s\n", $t_avg, $t_min, $t_max, $forte;
 }
 
 sub circular_permute {
-  my ( $atu, @args ) = @_;
+  my (@args) = @_;
   GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
   $lyu->chrome('flats') if $Flag_Flat;
-  emit_pitch_set( $atu,
-    $atu->circular_permute( args2pitchset( $atu, @args ) ) );
+  emit_pitch_set( $atu->circular_permute( args2pitchset(@args) ) );
 }
 
 sub complement {
-  my ( $atu, @args ) = @_;
+  my (@args) = @_;
   GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
   $lyu->chrome('flats') if $Flag_Flat;
-  emit_pitch_set( $atu, $atu->complement( args2pitchset( $atu, @args ) ) );
+  emit_pitch_set( $atu->complement( args2pitchset(@args) ) );
 }
 
 sub equivs {
-  my ( $atu, @args ) = @_;
+  my (@args) = @_;
   GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
   $lyu->chrome('flats') if $Flag_Flat;
 
   my ( @transpose, @transpose_invert, %seen );
-  my $pset = args2pitchset( $atu, @args );
+  my $pset = args2pitchset(@args);
 
   for my $i ( 0 .. $atu->scale_degrees - 1 ) {
     my $set = $atu->normal_form( $atu->transpose( $pset, $i ) );
@@ -156,58 +171,132 @@ sub equivs {
     }
   }
 
-  emit_pitch_set( $atu, \@transpose );
-  emit_pitch_set( $atu, \@transpose_invert );
+  emit_pitch_set( \@transpose );
+  emit_pitch_set( \@transpose_invert );
+}
+
+sub findall {
+  my (@args) = @_;
+  GetOptionsFromArray(
+    \@args, @Std_Opts,
+    'exclude=s' => \my $excludes,
+    'fn=s'      => \my $desired_forte_nums,
+    'root=s'    => \my $root_pitch
+  );
+  $lyu->chrome('flats') if $Flag_Flat;
+
+  my $desired = args2pitchset(@args);
+  my %excludes;
+  @excludes{ $lyu->notes2pitches( split /[, ]+/, $excludes ) } = ()
+    if defined $excludes;
+  $root_pitch = $lyu->notes2pitches($root_pitch) if defined $root_pitch;
+  my $fn_re = '^[' . join( '', parse_range($desired_forte_nums) ) . ']$';
+
+  my $fnums = $atu->fnums;
+  for my $fnum ( sort keys %$fnums ) {
+    if ( defined $desired_forte_nums ) {
+      ( my $prefix = $fnum ) =~ s/[-].+//;
+      next if $prefix !~ m/$fn_re/;
+    }
+    _findps( $fnums->{$fnum}, $desired, $root_pitch, \%excludes, $fnum );
+  }
 }
 
 sub findin {
-  my ( $atu, @args ) = @_;
-  GetOptionsFromArray( \@args, @Std_Opts, 'pitchset|P=s' => \my $base_input, )
-    || print_help();
+  my (@args) = @_;
+  GetOptionsFromArray(
+    \@args, @Std_Opts,
+    'exclude=s'    => \my $excludes,
+    'pitchset|P=s' => \my $base_input,
+    'root=s'       => \my $root_pitch
+  ) || print_help();
   $lyu->chrome('flats') if $Flag_Flat;
 
-  my $ps_base = args2pitchset( $atu, split /[ ,]/, $base_input );
-  my $desired = args2pitchset( $atu, @args );
+  my $ps_base;
+  if ( $base_input =~ m/^\d-/ ) {
+    $ps_base = $atu->forte2pcs($base_input);
+    die "unknown Forte Number '$base_input'\n" if !defined $ps_base;
+  } else {
+    $ps_base = args2pitchset( split /[ ,]/, $base_input );
+  }
+  my $desired = args2pitchset(@args);
+  my %excludes;
+  @excludes{ $lyu->notes2pitches( split /[, ]+/, $excludes ) } = ()
+    if defined $excludes;
+  $root_pitch = $lyu->notes2pitches($root_pitch) if defined $root_pitch;
 
   if ( @$desired > @$ps_base ) {
     die "cannot desire more than is present\n";
   }
 
-  for my $i ( 0 .. $atu->scale_degrees - 1 ) {
+  _findps( $ps_base, $desired, $root_pitch, \%excludes );
+}
+
+sub _findps {
+  my ( $ps_base, $desired, $root_pitch, $excludes, $fnum ) = @_;
+  $fnum //= '-';
+  $excludes //= {};
+
+  my $ps_width = 24 - ( $Flag_Lyout ? 0 : 6 );
+
+TRANS: for my $i ( 0 .. $atu->scale_degrees - 1 ) {
     my %tps;
     @tps{ @{ $atu->transpose( $ps_base, $i ) } } = ();
     if ( all { exists $tps{$_} } @$desired ) {
-      my @pitches = uniq( @$desired, keys %tps );
-      @pitches = $lyu->p2ly(@pitches) if $Flag_Lyout;
-      print "T($i)\t", join( ',', @pitches ), "\n";
-    }
+      my @pitches = @{ $atu->transpose( $ps_base, $i ) };
+      next if defined $root_pitch and $pitches[0] != $root_pitch;
+      if (%$excludes) {
+        for my $p (@pitches) {
+          next TRANS if exists $excludes->{$p};
+        }
+      }
 
+      my ( $t_avg, $t_min, $t_max, $t_ref ) = $tension->vertical( \@pitches );
+
+      @pitches = $lyu->p2ly(@pitches) if $Flag_Lyout;
+
+      printf "%s\tT(%d)\t%-${ps_width}s\t%.03f  %.03f  %.03f\n", $fnum, $i,
+        join( ',', @pitches ), $t_avg, $t_min, $t_max;
+    }
+  }
+
+TRANSINV: for my $i ( 0 .. $atu->scale_degrees - 1 ) {
     my %ips;
     @ips{ @{ $atu->transpose_invert( $ps_base, $i ) } } = ();
     if ( all { exists $ips{$_} } @$desired ) {
-      my @pitches = uniq( @$desired, keys %ips );
+      my @pitches = @{ $atu->transpose_invert( $ps_base, $i ) };
+      next if defined $root_pitch and $pitches[0] != $root_pitch;
+      if (%$excludes) {
+        for my $p (@pitches) {
+          next TRANSINV if exists $excludes->{$p};
+        }
+      }
+
+      my ( $t_avg, $t_min, $t_max, $t_ref ) = $tension->vertical( \@pitches );
+
       @pitches = $lyu->p2ly(@pitches) if $Flag_Lyout;
-      print "Ti($i)\t", join( ',', @pitches ), "\n";
+
+      printf "%s\tTi(%d)\t%-${ps_width}s\t%.03f  %.03f  %.03f\n", $fnum, $i,
+        join( ',', @pitches ), $t_avg, $t_min, $t_max;
     }
   }
 }
 
 sub forte2pcs {
-  my ( $atu, @args ) = @_;
+  my (@args) = @_;
   GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
 
-  emit_pitch_set( $atu, $atu->forte2pcs( $args[0] ) );
+  emit_pitch_set( $atu->forte2pcs( $args[0] ) );
 }
 
 sub fnums {
-  my ( $atu, @args ) = @_;
-  my $tension = Music::Tension::Cope->new();
+  my (@args) = @_;
 
   my $fns = $atu->fnums;
   for my $fn ( sort keys %$fns ) {
     my $pset = $fns->{$fn};
     my $icc  = $atu->interval_class_content($pset);
-    my ( $t_avg, $t_min, $t_max, $t_ref ) = $tension->pcs($pset);
+    my ( $t_avg, $t_min, $t_max, $t_ref ) = $tension->vertical($pset);
     printf "%s\t%-16s\t%-8s\t%.03f  %.03f %.03f\n", $fn, join( ',', @$pset ),
       join( '', @$icc ),
       $t_avg,
@@ -216,45 +305,48 @@ sub fnums {
 }
 
 sub emit_pitch_set {
-  my ( $atu, $pset, %params ) = @_;
+  my ( $pset, %params ) = @_;
 
   my $lyify = exists $params{lyflag} ? $params{lyflag} : $Flag_Lyout;
+  my $rs    = exists $params{rs}     ? $params{rs}     : ' ';
 
   my $has_nl = 0;
+  my $str    = '';
   for my $i (@$pset) {
     if ( ref $i eq 'ARRAY' ) {
-      $has_nl = emit_pitch_set( $atu, $i, %params );
+      $has_nl = emit_pitch_set( $i, %params );
     } else {
-      print( $lyify ? $lyu->p2ly($i) : $i, " " );
+      $str .= ( $lyify ? $lyu->p2ly($i) : $i ) . $rs;
     }
   }
-  print "\n" unless $has_nl;
+  $str =~ s/$rs\z//;
+  $str .= "\n" unless $has_nl;
+  print $str;
   return 1;
 }
 
 sub interval_class_content {
-  my ( $atu, @args ) = @_;
+  my (@args) = @_;
+  GetOptionsFromArray( \@args, @Std_Opts );
   emit_pitch_set(
-    $atu,
-    scalar $atu->interval_class_content( args2pitchset( $atu, @args ) ),
-    lyflag => 0
+    scalar $atu->interval_class_content( args2pitchset(@args) ),
+    lyflag => 0,
+    rs     => '',
   );
 }
 
 sub invariance_matrix {
-  my ( $atu, @args ) = @_;
-  emit_pitch_set(
-    $atu,
-    $atu->invariance_matrix( args2pitchset( $atu, @args ) ),
-    lyflag => 0
-  );
+  my (@args) = @_;
+  GetOptionsFromArray( \@args, @Std_Opts );
+  emit_pitch_set( $atu->invariance_matrix( args2pitchset(@args) ),
+    lyflag => 0 );
 }
 
 sub invariants {
-  my ( $atu, @args ) = @_;
+  my (@args) = @_;
   GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
   $lyu->chrome('flats') if $Flag_Flat;
-  my $ps = args2pitchset( $atu, @args );
+  my $ps = args2pitchset(@args);
 
   my %seen;
   @seen{@$ps} = ();
@@ -297,39 +389,38 @@ sub invariants {
 }
 
 sub invert {
-  my ( $atu, @args ) = @_;
+  my (@args) = @_;
   GetOptionsFromArray( \@args, @Std_Opts, 'axis|n=s' => \my $axis, )
     || print_help();
   $lyu->chrome('flats') if $Flag_Flat;
   $axis //= 0;
-  emit_pitch_set( $atu, $atu->invert( args2pitchset( $atu, @args ), $axis ) );
+  emit_pitch_set( $atu->invert( args2pitchset(@args), $axis ) );
 }
 
 sub multiply {
-  my ( $atu, @args ) = @_;
+  my (@args) = @_;
   GetOptionsFromArray( \@args, @Std_Opts, 'factor|n=s' => \my $factor, )
     || print_help();
   $lyu->chrome('flats') if $Flag_Flat;
   $factor //= 1;
-  emit_pitch_set( $atu,
-    $atu->multiply( args2pitchset( $atu, @args ), $factor ) );
+  emit_pitch_set( $atu->multiply( args2pitchset(@args), $factor ) );
 }
 
 sub normal_form {
-  my ( $atu, @args ) = @_;
+  my (@args) = @_;
   GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
   $lyu->chrome('flats') if $Flag_Flat;
-  emit_pitch_set( $atu, $atu->normal_form( args2pitchset( $atu, @args ) ) );
+  emit_pitch_set( $atu->normal_form( args2pitchset(@args) ) );
 }
 
 sub pcs2forte {
-  my ( $atu, @args ) = @_;
-  my $fn = $atu->pcs2forte( args2pitchset( $atu, @args ) ) || "";
+  my (@args) = @_;
+  my $fn = $atu->pcs2forte( args2pitchset(@args) ) || "";
   print $fn, "\n";
 }
 
 sub pitch2intervalclass {
-  my ( $atu, @args ) = @_;
+  my (@args) = @_;
   GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
   $lyu->chrome('flats') if $Flag_Flat;
   die "$0 pitch2intervalclass pitch\n"
@@ -338,158 +429,10 @@ sub pitch2intervalclass {
 }
 
 sub prime_form {
-  my ( $atu, @args ) = @_;
+  my (@args) = @_;
   GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
   $lyu->chrome('flats') if $Flag_Flat;
-  emit_pitch_set( $atu, $atu->prime_form( args2pitchset( $atu, @args ) ) );
-}
-
-sub recipe {
-  my ( $atu, @args ) = @_;
-  GetOptionsFromArray( \@args, @Std_Opts, 'file=s' => \my $rfile )
-    || print_help();
-  $lyu->chrome('flats') if $Flag_Flat;
-
-  my $ps = args2pitchset( $atu, @args );
-  my $wps = [@$ps];
-
-  open my $fh, '<', $rfile or die "could not open '$rfile': $!\n";
-  eval {
-    while ( my ( $method, @margs ) = split ' ', readline $fh ) {
-      next if !$method or $method =~ m/^[\s#]/;
-      chomp @margs;
-      die "not a ", ref $atu, " method" unless $atu->can($method);
-      $wps = $atu->$method( $wps, @margs );
-    }
-  };
-  if ($@) {
-    chomp $@;
-    die "recipe error at '$rfile' line $.: $@\n";
-  }
-  emit_pitch_set( $atu, $wps );
-}
-
-sub retrograde {
-  my ( $atu, @args ) = @_;
-  GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
-  $lyu->chrome('flats') if $Flag_Flat;
-  emit_pitch_set( $atu, $atu->retrograde( args2pitchset( $atu, @args ) ) );
-}
-
-sub rotate {
-  my ( $atu, @args ) = @_;
-  GetOptionsFromArray( \@args, @Std_Opts, 'rotate|n=s' => \my $r, )
-    || print_help();
-  $lyu->chrome('flats') if $Flag_Flat;
-  $r //= 0;
-  emit_pitch_set( $atu, $atu->rotate( args2pitchset( $atu, @args ), $r ) );
-}
-
-sub set_complex {
-  my ( $atu, @args ) = @_;
-  GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
-  $lyu->chrome('flats') if $Flag_Flat;
-  emit_pitch_set( $atu, $atu->set_complex( args2pitchset( $atu, @args ) ) );
-}
-
-sub subsets {
-  my ( $atu, @args ) = @_;
-  GetOptionsFromArray( \@args, @Std_Opts, 'length|len=i' => \my $l, )
-    || print_help();
-  $lyu->chrome('flats') if $Flag_Flat;
-  emit_pitch_set( $atu, $atu->subsets( args2pitchset( $atu, @args ), $l ) );
-}
-
-sub stdin2pitchsets {
-  my ($atu) = @_;
-  my $dis = $atu->scale_degrees;
-
-  my @ss;
-  while ( my $line = readline STDIN ) {
-    my @pset;
-    if ( $line =~ m/(\d-[zZ\d]+)/ ) {
-      @pset = @{ $atu->forte2pcs($1) };
-      die "unknown Forte Number\n" if !@pset;
-    } else {
-      for my $p ( $line =~ /([\d\w]+)/g ) {
-        if ( $p =~ m/^\d+/ ) {
-          push @pset, $p % $dis;
-        } else {
-          push @pset, $lyu->notes2pitches($p);
-        }
-      }
-    }
-    push @ss, \@pset;
-  }
-
-  return \@ss;
-}
-
-sub tcs {
-  my ( $atu, @args ) = @_;
-  emit_pitch_set(
-    $atu,
-    $atu->tcs( args2pitchset( $atu, @args ) ),
-    lyflag => 0
-  );
-}
-
-sub tcis {
-  my ( $atu, @args ) = @_;
-  emit_pitch_set(
-    $atu,
-    $atu->tcis( args2pitchset( $atu, @args ) ),
-    lyflag => 0
-  );
-}
-
-sub tension {
-  my ( $atu, @args ) = @_;
-  my $tension = Music::Tension::Cope->new();
-
-  my ( $t_avg, $t_min, $t_max, $t_ref ) =
-    $tension->pcs( args2pitchset( $atu, @args ) );
-  printf "%.03f  %.03f %.03f\t%s\n", $t_avg, $t_min, $t_max,
-    join( ', ', @$t_ref );
-}
-
-sub transpose {
-  my ( $atu, @args ) = @_;
-  GetOptionsFromArray( \@args, @Std_Opts, 'transpose|n=s' => \my $t, )
-    || print_help();
-  $lyu->chrome('flats') if $Flag_Flat;
-  $t //= 0;
-  emit_pitch_set( $atu, $atu->transpose( args2pitchset( $atu, @args ), $t ) );
-}
-
-sub transpose_invert {
-  my ( $atu, @args ) = @_;
-  GetOptionsFromArray(
-    \@args, @Std_Opts,
-    'axis|a=s'      => \my $axis,
-    'transpose|t=s' => \my $t,
-  ) || print_help();
-  $lyu->chrome('flats') if $Flag_Flat;
-  $axis //= 0;
-  $t    //= 0;
-  emit_pitch_set( $atu,
-    $atu->transpose_invert( args2pitchset( $atu, @args ), $t, $axis ) );
-}
-
-sub variances {
-  my ( $atu, @args ) = @_;
-  GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
-  $lyu->chrome('flats') if $Flag_Flat;
-  emit_pitch_set( $atu, [ $atu->variances( @{ stdin2pitchsets($atu) } ) ] );
-}
-
-sub zrelation {
-  my ($atu) = @_;
-  emit_pitch_set(
-    $atu,
-    [ $atu->zrelation( @{ stdin2pitchsets($atu) } ) ],
-    lyflag => 0
-  );
+  emit_pitch_set( $atu->prime_form( args2pitchset(@args) ) );
 }
 
 sub print_help {
@@ -515,6 +458,8 @@ is a hyphen. Exceptions include:
   transpose --n=N       Custom transposition (default is 0).
 
 Forte Numbers should be usable anywhere a pitch set can be specified.
+The output will vary depending on the mode, and may include Cope
+tension numbers.
 
 Example:
   $0 invert --axis=3  0 3 6 7
@@ -540,6 +485,158 @@ END_USAGE
   exit 64;
 }
 
+sub recipe {
+  my (@args) = @_;
+  GetOptionsFromArray( \@args, @Std_Opts, 'file=s' => \my $rfile )
+    || print_help();
+  $lyu->chrome('flats') if $Flag_Flat;
+
+  my $ps  = args2pitchset(@args);
+  my $wps = [@$ps];
+
+  open my $fh, '<', $rfile or die "could not open '$rfile': $!\n";
+  eval {
+    while ( my ( $method, @margs ) = split ' ', readline $fh ) {
+      next if !$method or $method =~ m/^[\s#]/;
+      chomp @margs;
+      die "not a ", ref $atu, " method" unless $atu->can($method);
+      $wps = $atu->$method( $wps, @margs );
+    }
+  };
+  if ($@) {
+    chomp $@;
+    die "recipe error at '$rfile' line $.: $@\n";
+  }
+  emit_pitch_set($wps);
+}
+
+sub retrograde {
+  my (@args) = @_;
+  GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
+  $lyu->chrome('flats') if $Flag_Flat;
+  emit_pitch_set( $atu->retrograde( args2pitchset(@args) ) );
+}
+
+sub rotate {
+  my (@args) = @_;
+  GetOptionsFromArray( \@args, @Std_Opts, 'rotate|n=s' => \my $r, )
+    || print_help();
+  $lyu->chrome('flats') if $Flag_Flat;
+  $r //= 0;
+  emit_pitch_set( $atu->rotate( args2pitchset(@args), $r ) );
+}
+
+sub set_complex {
+  my (@args) = @_;
+  GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
+  $lyu->chrome('flats') if $Flag_Flat;
+  emit_pitch_set( $atu->set_complex( args2pitchset(@args) ) );
+}
+
+sub subsets {
+  my (@args) = @_;
+  GetOptionsFromArray( \@args, @Std_Opts, 'length|len=i' => \my $l, )
+    || print_help();
+  $lyu->chrome('flats') if $Flag_Flat;
+  emit_pitch_set( $atu->subsets( args2pitchset(@args), $l ) );
+}
+
+sub stdin2pitchsets {
+  my ($atu) = @_;
+  my $dis = $atu->scale_degrees;
+
+  my @ss;
+  while ( my $line = readline STDIN ) {
+    my @pset;
+    if ( $line =~ m/(\d-[zZ\d]+)/ ) {
+      @pset = @{ $atu->forte2pcs($1) };
+      die "unknown Forte Number '$1'\n" if !@pset;
+    } else {
+      for my $p ( $line =~ /([\d\w]+)/g ) {
+        if ( $p =~ m/^\d+/ ) {
+          push @pset, $p % $dis;
+        } else {
+          push @pset, $lyu->notes2pitches($p);
+        }
+      }
+    }
+    push @ss, \@pset;
+  }
+
+  return \@ss;
+}
+
+sub tcs {
+  my (@args) = @_;
+  emit_pitch_set( $atu->tcs( args2pitchset(@args) ), lyflag => 0 );
+}
+
+sub tcis {
+  my (@args) = @_;
+  emit_pitch_set( $atu->tcis( args2pitchset(@args) ), lyflag => 0 );
+}
+
+sub tension {
+  my (@args) = @_;
+
+  my ( $t_avg, $t_min, $t_max, $t_ref ) =
+    $tension->vertical( args2pitchset(@args) );
+  printf "%.03f  %.03f  %.03f\t%s\n", $t_avg, $t_min, $t_max,
+    join( ',', @$t_ref );
+}
+
+sub transpose {
+  my (@args) = @_;
+  GetOptionsFromArray( \@args, @Std_Opts, 'transpose|n=s' => \my $t, )
+    || print_help();
+  $lyu->chrome('flats') if $Flag_Flat;
+
+  my $pset = args2pitchset(@args);
+
+  $t //= 0;
+  if ( !looks_like_number($t) ) {
+    $t = $lyu->notes2pitches($t) - $pset->[0];
+  }
+  emit_pitch_set( $atu->transpose( $pset, $t ) );
+}
+
+sub transpose_invert {
+  my (@args) = @_;
+  GetOptionsFromArray(
+    \@args, @Std_Opts,
+    'axis|a=s'      => \my $axis,
+    'transpose|t=s' => \my $t,
+  ) || print_help();
+  $lyu->chrome('flats') if $Flag_Flat;
+
+  my $pset = args2pitchset(@args);
+
+  $axis //= 0;
+  if ( !looks_like_number($axis) ) {
+    $axis = $lyu->notes2pitches($axis);
+  }
+
+  $t //= 0;
+  if ( !looks_like_number($t) ) {
+    $t = $lyu->notes2pitches($t) - $pset->[0];
+  }
+
+  emit_pitch_set( $atu->transpose_invert( $pset, $t, $axis ) );
+}
+
+sub variances {
+  my (@args) = @_;
+  GetOptionsFromArray( \@args, @Std_Opts ) || print_help();
+  $lyu->chrome('flats') if $Flag_Flat;
+  emit_pitch_set( [ $atu->variances( @{ stdin2pitchsets($atu) } ) ] );
+}
+
+sub zrelation {
+  my ($atu) = @_;
+  emit_pitch_set( [ $atu->zrelation( @{ stdin2pitchsets($atu) } ) ],
+    lyflag => 0 );
+}
+
 END {
   # Report problems when writing to stdout (perldoc perlopentut)
   unless ( close(STDOUT) ) {
@@ -558,8 +655,6 @@ atonal-util - routines for atonal composition and analysis
 Prime form and APIC vector for a pitch set:
 
   $ atonal-util basic --ly f fis c
-  c cis fis
-  1 0 0 0 1 1 
 
 Apply a series of transformations to a pitch set:
 
@@ -578,7 +673,8 @@ arguments and a pitch set. Pitch sets can be read as arguments or from
 standard input; some modes require two pitch sets that must be supplied
 one per line on standard input.
 
-See also L<Music::AtonalUtil> for more documentation.
+The output will vary depending on the mode, and may include Cope
+tension numbers (average, min, max tension for the pitch set).
 
 =head1 OPTIONS
 
@@ -636,15 +732,34 @@ See L<Music::AtonalUtil>.
 Equivalents under transposition and inverse transposition. An optional
 axis of inversion (default: 0, though some forms use 6) can be supplied.
 
-=item B<findin> I<-P base_pitch_set> I<pitches>
+=item B<findall> I<[--exclude=p1[,p2]]> I<[--fn=nums]> I<[--root=pitch]> I<pitches>
+
+Find all Forte pitch sets in which the given pitches exist. Like
+B<findin>, except iterates over all Forte pitch sets instead of just
+the given one.
+
+With I<--exclude>, omits results containing the listed pitches. With I<--
+fn>, limits the search to the mentioned forte number prefixes (the
+number of pitches in the set). With I<--root>, limits matches to those
+with the named root pitch.
+
+  $ atonal-util findall --root=c --fn=4-5 c e g bes
+
+Tensions may be lower than expected if the root pitch creates an open
+position chord versus a closed position of that set.
+
+=item B<findin> I<[--exclude=p1[,p2]]> I<[--root=pitch]> I<--pitchset=base_set> I<pitches>
 
 Answers questions such as, given a base pitch set of C<[0,3,7]>, and the
 notes d and bes, what pitch sets (via any B<transpose> or
-B<transpose_invert> operation) complete the base pitch set:
+B<transpose_invert> operation) complete the base pitch set. With I<--
+exclude>, omits results containing the listed pitches. With I<--root>,
+limits matches to those with the named root pitch.
 
-  $ atonal-util findin --ly --flats -P 0,3,7 d bes
-  Ti(5) d,bes,f
-  T(7)  d,bes,g
+  $ atonal-util findin --exclude=c,ees --pitchset=5-25 d fis a
+
+Tensions may be lower than expected if the root pitch creates an open
+position chord versus a closed position of that set.
 
 =item B<forte2pcs> I<forte_number>
 
@@ -670,9 +785,9 @@ Returns list of B<transpose> or B<transpose_invert> operations that have
 invariant pitches with the supplied pitch set, along with which pitches
 have not varied.
 
-=item B<invert> I<--axis=inversion_axis>
+=item B<invert> I<[--axis=inversion_axis]>
 
-See L<Music::AtonalUtil>.
+See L<Music::AtonalUtil>. Default axis is around 0.
 
 =item B<multiply>
 
@@ -707,7 +822,7 @@ for example:
 
 See L<Music::AtonalUtil>.
 
-=item B<rotate>
+=item B<rotate> I<[--rotate=integer]>
 
 See L<Music::AtonalUtil>.
 
@@ -715,9 +830,11 @@ See L<Music::AtonalUtil>.
 
 See L<Music::AtonalUtil>.
 
-=item B<subsets>
+=item B<subsets> I<[--length=integer]>
 
-See L<Music::AtonalUtil>.
+See L<Music::AtonalUtil>. The length, if supplied, must be a magnitude
+equal to or less than the number of pitches supplied, and probably also
+2 or higher.
 
 =item B<tcis>
 
@@ -733,13 +850,20 @@ Returns the average, min, max, and tension values for all the tensions
 in the passed pitch set, from the first notes in the set up to the last.
 (Via Music::Tension::Cope.)
 
-=item B<transpose>
+=item B<transpose> I<--transpose=integer_or_note>
 
-See L<Music::AtonalUtil>.
+See L<Music::AtonalUtil>. Transposes the supplied pitches by the
+specified integer (by default 0, or a no-op), or to the specified note.
 
-=item B<transpose_invert>
+  $ atonal-util transpose --transpose=4 --ly c e g
+  e gis b
+  $ atonal-util transpose --transpose=e --ly c e g
+  e gis b
 
-See L<Music::AtonalUtil>.
+=item B<transpose_invert> I<--transpose=integer_or_note> I<[--axis=integer_or_note]>
+
+See L<Music::AtonalUtil>. Transposes supplied pitch set by the specified
+integer, or to the specified note. Default axis for inversion is 0 (c).
 
 =item B<variances>
 

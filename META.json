@@ -42,7 +42,9 @@
             "Music::Chord::Note" : 0,
             "Music::Chord::Positions" : 0,
             "Music::LilyPondUtil" : 0,
-            "Music::Tension" : 0,
+            "Music::Tension" : "0.1",
+            "Parse::Range" : 0,
+            "Scalar::Util" : 0,
             "Text::Roman" : 0,
             "Text::Wrap" : 0
          }
@@ -58,5 +60,5 @@
          "url" : "http://github.com/thrig/App-MusicTools"
       }
    },
-   "version" : "0.02"
+   "version" : "0.03"
 }
