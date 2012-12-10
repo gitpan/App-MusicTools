@@ -70,9 +70,8 @@ $Modes{'major'} = $Modes{'ionian'};
 $Modes{'minor'} = $Modes{'aeolian'};
 
 my $atu = Music::AtonalUtil->new;
-# Chords generated from the root up, with no notion of register, so omit
-# any register info by disabling state.
-my $lyu = Music::LilyPondUtil->new( keep_state => 0 );
+# Chords generated from the root up, with no notion of register
+my $lyu = Music::LilyPondUtil->new( ignore_register => 1, keep_state => 0 );
 
 my $output_tmpl = '%{chord}' . "\n";
 
@@ -101,14 +100,7 @@ $Mode = 'minor' if $use_minor;
 die "error: no such mode '$Mode'" unless exists $Modes{$Mode};
 
 $Default_Factor //= $DEFAULT_CHORD_FACTOR;
-
-if ($Transpose) {
-  if ( $Transpose =~ m/^(-?\d+)$/ ) {
-    $Transpose = $1 % $DEG_IN_SCALE;
-  } else {
-    $Transpose = $lyu->notes2pitches($Transpose);
-  }
-}
+$Transpose = $lyu->notes2pitches($Transpose) if $Transpose;
 
 $output_tmpl =~ s/(\\.)/qq!"$1"!/eeg;
 $output_tmpl .= "\n" unless $output_tmpl =~ m/\s$/;
@@ -239,6 +231,11 @@ sub parse_roman_numeral {
     }
   }
 
+  # KLUGE $alterations is something of a mess; might be better to build
+  # the chord up by 3rds--minors for diminished, majors for aug,
+  # major/minor 3rds for major, minor/major for minor. (though 7ths and
+  # up still tricky)
+
   my $scale_degree = roman2int($roman) if $roman;
   if ( !$scale_degree ) {
     croak "could not parse '$numeral'";
@@ -256,6 +253,7 @@ sub parse_roman_numeral {
   # Sharpen or flatten the root (e.g. for bII or #IV chromatic alterations).
   if ( $pre =~ m/[$FLAT_CHARS]/ ) {
     $alterations{0} = -1;
+    $alterations{2} = -1;
   } elsif ( $pre =~ m/[$SHARP_CHARS]/ ) {
     $alterations{0} = 1;
   }
