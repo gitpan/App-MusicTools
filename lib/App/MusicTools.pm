@@ -1,10 +1,12 @@
+# -*- Perl -*-
+
 package App::MusicTools;
 
 use 5.010000;
 use strict;
 use warnings;
 
-our $VERSION = '0.52';
+our $VERSION = '0.70';
 
 1;
 __END__
@@ -25,7 +27,10 @@ App-MusicTools - command line utilities for music composition and analysis
   $ scalemogrifier --mode=mixolydian --transpose=fis
   fis gis ais b cis dis e fis'
 
-  % vov --outputtmpl='<%{chord}> \t% %{vov}' I IV/IV V7/IV IV V7 I
+  $ varionator '(I I6) (II IV II6 IV6) (V V7 III) I'
+  ...
+
+  $ vov --outputtmpl='<%{chord}> \t% %{vov}' I IV/IV V7/IV IV V7 I
   <c e g> 	% I
   <b dis f> 	% IV/IV
   <c e g b> 	% V7/IV
@@ -35,15 +40,23 @@ App-MusicTools - command line utilities for music composition and analysis
 
 =head1 DESCRIPTION
 
-This distribution contains a number of command line utilities related to
-music composition and analysis, examples of which are shown in the
-SYNOPSIS. Run C<perldoc> on the command name for documentation on how to
-use each tool.
+This distribution contains various command line utilities related to
+music composition and analysis, brief examples of which are shown in the
+L</"SYNOPSIS">, above. Run C<perldoc> on the command name for additional
+documentation on how to use each tool, as several of the programs have
+many, many more options than shown here.
 
 The C<zsh-compdef> directory of this distribution includes ZSH
 completion scripts for the command line utilities. Install these files
 to a ZSH C<$fpath> directory, and follow the ZSH documentation on setting
 up tab completion.
+
+=head1 BUGS
+
+As of Dec 2012, C<vov> is a bit buggy for some cases, such as C<bVII>,
+need to rework the triad building logic. For other bugs, send patches,
+as there are probably lots between my bad Perl and badder understanding
+of music theory.
 
 =head1 SEE ALSO
 
@@ -51,7 +64,7 @@ up tab completion.
 
 =item *
 
-http://www.lilypond.org/ and most notably the Learning and Notation
+L<http://www.lilypond.org/> and most notably the Learning and Notation
 manuals, as the tools make use of the default lilypond note letter
 conventions (e.g. fis for F sharp, ees for E flat, etc.)
 
@@ -70,7 +83,7 @@ B<Theory of Harmony> by Arnold Schoenberg (ISBN 978-0-520-26608-7).
 
 =item *
 
-http://en.wikipedia.org/wiki/Forte_number
+L<http://en.wikipedia.org/wiki/Forte_number>
 
 =item *
 
@@ -85,7 +98,7 @@ Jeremy Mates, E<lt>jmates@cpan.orgE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2012 by Jeremy Mates
+Copyright (C) 2012,2013 by Jeremy Mates
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.16 or, at

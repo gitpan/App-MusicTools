@@ -1,5 +1,5 @@
 #!perl
-#
+
 # Musical V/V utility, for arbitrary "chord X relative to Y as tonic
 # in key Z" type calculations (V/V are called "applied dominants"
 # among various other names). Any scale degree can be used, e.g. the
@@ -493,11 +493,12 @@ L<App::MusicTools> distribution.
 If the bug is in the latest version, send a report to the author.
 Patches that fix problems or add new features are welcome.
 
-http://github.com/thrig/App-MusicTools
+L<http://github.com/thrig/App-MusicTools>
 
 =head2 Known Issues
 
-None at this time but probably lots.
+bVII and such might be buggy, need to revisit the building-of-triad
+logic soas not to create accidentally augmented chords.
 
 =head1 SEE ALSO
 
@@ -505,11 +506,11 @@ None at this time but probably lots.
 
 =item *
 
-http://www.lilypond.org/
+L<http://www.lilypond.org/>
 
 =item *
 
-https://en.wikipedia.org/wiki/Roman_numeral_analysis
+L<https://en.wikipedia.org/wiki/Roman_numeral_analysis>
 
 =back
 
