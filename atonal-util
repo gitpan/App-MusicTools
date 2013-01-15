@@ -23,6 +23,8 @@ use Music::Tension::Cope ();
 use Parse::Range qw/parse_range/;
 use Scalar::Util qw/looks_like_number/;
 
+my $FORTE_NUMBER_RE = qr/[3-9]-[zZ]?\d{1,2}/;
+
 my %modes = (
   basic            => \&basic,
   circular_permute => \&circular_permute,
@@ -37,6 +39,7 @@ my %modes = (
   forte2pcs              => \&forte2pcs,
   freq2pitch             => \&freq2pitch,
   interval_class_content => \&interval_class_content,
+  intervals2pcs          => \&intervals2pcs,
   invariance_matrix      => \&invariance_matrix,
   invariants             => \&invariants,
   invert                 => \&invert,
@@ -46,6 +49,7 @@ my %modes = (
   # TODO
   #notes2dur              => \&notes2time,
   pcs2forte           => \&pcs2forte,
+  pcs2intervals       => \&pcs2intervals,
   pitch2freq          => \&pitch2freq,
   pitch2intervalclass => \&pitch2intervalclass,
   pitch2ly            => \&pitch2ly,
@@ -131,12 +135,12 @@ sub args2pitchset {
   }
 
   my $pitch_set;
-  if ( $args[0] =~ m/^\d-/ ) {
-    $pitch_set = $Atu->forte2pcs( $args[0] );
+  if ( $args[0] =~ m/($FORTE_NUMBER_RE)/ ) {
+    $pitch_set = $Atu->forte2pcs($1);
     die "unknown Forte Number '$args[0]'\n" if !defined $pitch_set;
   } else {
     for my $arg (@args) {
-      for my $p ( $arg =~ /([\d\w]+)/g ) {
+      for my $p ( $arg =~ /([-\d\w]+)/g ) {
         push @$pitch_set, $Lyu->notes2pitches($p);
       }
     }
@@ -489,6 +493,18 @@ sub interval_class_content {
   );
 }
 
+sub intervals2pcs {
+  my (@args) = @_;
+  GetOptionsFromArray( \@args, @Std_Opts, 'pitch|n=s' => \my $start_pitch )
+    or print_help();
+  $start_pitch = $Lyu->notes2pitches( $start_pitch // 0 );
+
+  $Lyu->ignore_register(0);
+
+  emit_pitch_set( $Atu->intervals2pcs( args2pitchset(@args), $start_pitch ),
+    rs => $Flag_Record_Sep );
+}
+
 sub invariance_matrix {
   my (@args) = @_;
   GetOptionsFromArray( \@args, @Std_Opts );
@@ -643,6 +659,19 @@ sub pcs2forte {
   my (@args) = @_;
   my $fn = $Atu->pcs2forte( args2pitchset(@args) ) || "";
   print $fn, "\n";
+}
+
+sub pcs2intervals {
+  my (@args) = @_;
+  GetOptionsFromArray( \@args, @Std_Opts ) or print_help();
+
+  $Lyu->ignore_register(0);
+
+  emit_pitch_set(
+    $Atu->pcs2intervals( args2pitchset(@args) ),
+    lyflag => 0,
+    rs     => $Flag_Record_Sep,
+  );
 }
 
 sub pitch2freq {
@@ -818,11 +847,11 @@ sub stdin2pitchsets {
   my @ss;
   while ( my $line = readline STDIN ) {
     my @pset;
-    if ( $line =~ m/(\d-[zZ\d]+)/ ) {
+    if ( $line =~ m/($FORTE_NUMBER_RE)/ ) {
       @pset = @{ $Atu->forte2pcs($1) };
       die "unknown Forte Number '$1'\n" if !@pset;
     } else {
-      for my $p ( $line =~ /([\d\w]+)/g ) {
+      for my $p ( $line =~ /([-\d\w]+)/g ) {
         push @pset, $Lyu->notes2pitches($p);
       }
     }
@@ -1072,6 +1101,10 @@ number to a lilypond note name.
 
 See L<Music::AtonalUtil>.
 
+=item B<intervals2pcs>
+
+See L<Music::AtonalUtil>.
+
 =item B<invariance_matrix>
 
 See L<Music::AtonalUtil>.
@@ -1107,6 +1140,10 @@ See L<Music::AtonalUtil>.
 =item B<pcs2forte>
 
 Given a pitch set, returns the corresponding Forte Number, if any.
+
+=item B<pcs2intervals>
+
+See L<Music::AtonalUtil>.
 
 =item B<pitch2freq> I<pitches...|->
 
@@ -1215,6 +1252,8 @@ associated mistakes in understanding thereof by the author.
 
 =head1 SEE ALSO
 
+http://en.wikipedia.org/wiki/Forte_number
+
 L<Music::AtonalUtil>, L<Music::LilyPondUtil>, L<Music::Tension::Cope>
 
 =head1 AUTHOR
@@ -1223,7 +1262,7 @@ Jeremy Mates
 
 =head1 COPYRIGHT
 
-Copyright (C) 2012 by Jeremy Mates
+Copyright (C) 2012-2013 by Jeremy Mates
 
 This script is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.16 or, at

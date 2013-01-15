@@ -6,7 +6,7 @@ use 5.010000;
 use strict;
 use warnings;
 
-our $VERSION = '0.72';
+our $VERSION = '0.80';
 
 1;
 __END__
@@ -98,7 +98,7 @@ Jeremy Mates, E<lt>jmates@cpan.orgE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2012,2013 by Jeremy Mates
+Copyright (C) 2012-2013 by Jeremy Mates
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself, either Perl version 5.16 or, at
