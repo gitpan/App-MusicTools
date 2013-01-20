@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               App-MusicTools
-version:            0.80
+version:            0.90
 abstract:           command line utilities for music composition and analysis
 author:
     - Jeremy Mates <jmates@cpan.org>
@@ -20,7 +20,7 @@ requires:
     List::MoreUtils:      0
     List::Util:           0
     Music::AtonalUtil:    0.7
-    Music::Chord::Note:   0
+    Music::Canon:         0.21
     Music::Chord::Positions:  0
     Music::LilyPondUtil:  0.1
     Music::Tension:       0.6
