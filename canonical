@@ -21,6 +21,7 @@ my %Modes = (
 my $Flag_Non_Octave_Scale = 0;
 my @Std_Opts              = (
   'contrary!'   => \my $Flag_Contrary,
+  'flats!'      => \my $Flag_Flats,
   'raw!'        => \my $Flag_Raw,
   'relative=s'  => \my $Flag_Relative,
   'retrograde!' => \my $Flag_Retrograde,
@@ -40,10 +41,6 @@ GetOptionsFromArray( \@leading_args, @Std_Opts, 'help|h' => \&emit_help, )
 
 my $mode = shift;
 emit_help() if !defined $mode or !exists $Modes{$mode};
-
-if ( !@ARGV or @ARGV == 1 and $ARGV[0] eq '-' ) {
-  chomp( @ARGV = <STDIN> );
-}
 
 my $ret;
 eval { $ret = $Modes{$mode}->(@ARGV) };
@@ -73,6 +70,7 @@ sub _init_obj {
     mode       => 'relative',
     keep_state => 1,
   );
+  $l->chrome( defined $Flag_Flats  ? 'flats'    : 'sharps' );
   $l->mode( defined $Flag_Relative ? 'relative' : 'absolute' );
   $l->prev_note($Flag_Relative) if defined $Flag_Relative;
 
@@ -125,12 +123,13 @@ Usage: $PROG_NAME [opts] exact [exactopts] note1 note2 .. noteN
 
 Exact interval mapping. Options include:
 
-  --raw           Emit raw pitch numbers in output instead of note names.
-  --relative=N    Input is relative to lilypond note N (absolute notation is
-                  assumed by default otherwise).
-  --contrary      Compute canon in contrary motion.
-  --retrograde    Reverse the output voice.
-  --transpose=N   Transpose output voice by semitones or to a lilypond note.
+  --contrary     Compute canon in contrary motion.
+  --flats        Print notes with flats instead of sharps.
+  --raw          Emit raw pitch numbers in output instead of note names.
+  --relative=N   Input is relative to lilypond note N (absolute notation is
+                 assumed by default otherwise).
+  --retrograde   Reverse the output voice.
+  --transpose=N  Transpose output voice by semitones or to a lilypond note.
 
 Run perldoc(1) on $PROG_NAME for additional documentation.
 
@@ -147,6 +146,9 @@ Modal interval mapping. In particular:
   --input=mode   Set the input and output modes. These may be Music::Scales
   --output=mode  names, or Forte Numbers. Major to Major used by default.
 
+  --ep=N         Set the start and end pitch via set_modal_pitches().
+  --sp=N         Necessary if phrase begins on non-tonic scale degree.
+
   --nos          Allow for non-octave scales. Necessary if doing crazy
                  things with intervals in the --input or --output options.
 
@@ -154,10 +156,11 @@ Modal interval mapping. In particular:
 
 General options include:
 
+  --contrary     Compute canon in contrary motion.
+  --flats        Print notes with flats instead of sharps.
   --raw          Emit raw pitch numbers in output instead of note names.
   --relative=N   Input is relative to lilypond note N (absolute notation is
                  assumed by default otherwise).
-  --contrary     Compute canon in contrary motion.
   --retrograde   Reverse the output voice.
   --transpose=N  Transpose output voice by semitones or to a lilypond note.
 
@@ -173,6 +176,10 @@ sub do_exact {
     or emit_help_exact();
   my ( $canon, $lyu ) = _init_obj();
 
+  if ( !@args or ( @args == 1 and $args[0] eq '-' ) ) {
+    chomp( @args = readline STDIN );
+  }
+
   my @pitches = $lyu->notes2pitches( map split, @args );
   my @new_phrase = $canon->exact_map( \@pitches );
 
@@ -184,11 +191,13 @@ sub do_modal {
   my @args = @_;
   GetOptionsFromArray(
     \@args, @Std_Opts,
-    'help|h'   => \&emit_help_modal,
-    'input=s'  => \my $input_mode,
-    'nos!'     => \$Flag_Non_Octave_Scale,
-    'output=s' => \my $output_mode,
-    'undef=s'  => \my $whoops_undef,
+    'endpitch|ep=s'   => \my $end_pitch,
+    'help|h'          => \&emit_help_modal,
+    'input=s'         => \my $input_mode,
+    'nos!'            => \$Flag_Non_Octave_Scale,
+    'output=s'        => \my $output_mode,
+    'startpitch|sp=s' => \my $start_pitch,
+    'undef=s'         => \my $whoops_undef,
   ) or emit_help_modal();
   my ( $canon, $lyu ) = _init_obj();
 
@@ -197,7 +206,15 @@ sub do_modal {
   $canon->set_scale_intervals( 'output', _parse_modal_opt($output_mode) )
     if defined $output_mode;
 
+  $canon->set_modal_pitches( $start_pitch, $end_pitch )
+    if defined $start_pitch
+    or defined $end_pitch;
+
   $whoops_undef //= 'x';
+
+  if ( !@args or ( @args == 1 and $args[0] eq '-' ) ) {
+    chomp( @args = readline STDIN );
+  }
 
   my @pitches = $lyu->notes2pitches( map split, @args );
   my @new_phrase;
@@ -241,6 +258,10 @@ module. Custom questions might be better answered by coding directly
 against L<Music::Canon>, see the C<eg/> directory under the distribution
 of that Perl module for examples.
 
+A major difference between this utility and L<Music::Canon> is that the
+module assumes contrary motion and retrograde by default, while this
+utility does no.
+
 =head1 GLOBAL OPTIONS
 
 This script currently supports the following global command line
@@ -251,6 +272,10 @@ switches. These can also be specified to each of the underlying modes.
 =item B<--contrary> B<--nocontrary>
 
 Whether to compute output line in contrary motion or not.
+
+=item B<--flats> B<--noflats>
+
+Print notes with flats instead of sharps.
 
 =item B<--help>
 
@@ -296,6 +321,12 @@ listed above, accepts:
 
 =over 4
 
+=item B<--endpitch>=I<pitch_or_note> | B<--ep>=I<pitch_or_note>
+
+Sets the output mode starting pitch via B<set_modal_pitches>. Probably
+should also be called with B<--startpitch>. Very necessary if the phrase
+begins on a non-tonic scale degree.
+
 =item B<--input>=I<scale_or_forte_number>
 
 Scale name (see L<Music::Scales>) or Forte Number to use for the input.
@@ -318,6 +349,12 @@ octave point.
 
 Like B<--input>, except for the output line.
 
+=item B<--startpitch>=I<pitch_or_note> | B<--sp>=I<pitch_or_note>
+
+Sets the input mode starting pitch via B<set_modal_pitches>. Probably
+should also be called with B<--endpitch>. Very necessary if the phrase
+begins on a non-tonic scale degree.
+
 =item B<--undef>=I<string>
 
 String to use for notes or pitches that cannot be converted. If unset,
@@ -327,6 +364,9 @@ between C and B downwards in the output line for the chromatic C sharp:
 
   $ canonical --relative=c modal --contrary --undef=OOPS c cis d
   c OOPS b
+
+Set this to C<r> or C<s> to have C<lilypond> or C<ly-fu> ignore the
+impossible note.
 
 =back
 
