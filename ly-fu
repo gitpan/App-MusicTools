@@ -39,16 +39,16 @@ my $SCORE_SUFFIX = '.pdf';
 
 my @CLEANUP_SUFFIX = qw/ps pdf/;
 
-my $tempo       = 130;
-my $instrument  = "acoustic grand";
-my $do_open     = 0;
-my $relative    = q{c'};
+my $do_open    = 0;
+my $instrument = "acoustic grand";
+my $is_absolute;
 my $partial     = q{};
+my $relative    = q{c'};
+my $repeats     = 1;
 my $save_layout = 0;
 my $skip_midi   = 0;
-my ( $is_absolute, $repeats );
-my $prestaff    = q{};
 my $sleep_kluge = 0;
+my $tempo       = 130;
 
 ########################################################################
 #
@@ -75,7 +75,7 @@ GetOptions(
   'open'           => \$do_open,
   'partial|p=s'    => \$partial,
   'relative|b=s'   => \$relative,
-  'repeats|r=s'    => \$repeats,
+  'repeats|r=i'    => \$repeats,
   'silent|s'       => \$skip_midi,
   'sleep|S=s'      => \$sleep_kluge,
   'tempo|t=s'      => \$tempo,
@@ -98,10 +98,6 @@ if ( @ARGV == 1 and $ARGV[0] eq '-' ) {
   s/\s+%\s.+$// for @ARGV;    # strip lilypond comments
 }
 
-if ( defined $repeats ) {
-  @ARGV = (@ARGV) x $repeats;
-}
-
 my $pre_art  = '';
 my $post_art = '';
 if ($do_articulate) {
@@ -110,7 +106,7 @@ if ($do_articulate) {
 }
 my $event_listener = $do_events ? '\include "event-listener.ly"' : "";
 
-$prestaff = "\\relative $relative" unless $is_absolute;
+my $rel_str = defined $relative ? '\relative ' . $relative : '';
 
 my $ly_template = <<"END_TMPL";
 \\version "$LILYPOND_VERSION"
@@ -119,26 +115,28 @@ $event_listener
 \\header {
   title = "ly-fu generated output"
 }
-themusic = {
-  \\tempo 4=$tempo
-  $partial
+themusic = $rel_str {
   @ARGV
 }
 \\score {
-  \\new Staff << $prestaff {
+  \\new Staff << $rel_str {
 % only in lilypond 2.16
 %   \\accidentalStyle "neo-modern"
     \\set Staff.instrumentName = #"$instrument"
-    \\themusic
+    \\tempo 4=$tempo
+    $partial
+    \\repeat volta $repeats { \\themusic }
   } >>
   \\layout { }
 }
 
 \\score {
-  \\new Staff << $prestaff {
+  \\new Staff << $rel_str {
     \\set Staff.midiInstrument = #"$instrument"
     $pre_art
-    \\themusic
+    \\tempo 4=$tempo
+    $partial
+    \\repeat unfold $repeats { \\themusic }
     $post_art
   } >>
   \\midi { }

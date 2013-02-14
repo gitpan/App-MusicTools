@@ -27,7 +27,7 @@ requires:
   List::MoreUtils: 0
   List::Util: 0
   Music::AtonalUtil: 0.7
-  Music::Canon: 0.21
+  Music::Canon: 0.5
   Music::Chord::Positions: 0
   Music::LilyPondUtil: 0.1
   Music::Scales: 0
@@ -41,4 +41,4 @@ resources:
   homepage: http://github.com/thrig/App-MusicTools
   license: http://dev.perl.org/licenses/
   repository: http://github.com/thrig/App-MusicTools
-version: 0.95
+version: 0.96
