@@ -39,8 +39,9 @@ requires:
   Test::More: 0
   Text::Roman: 0
   Text::Wrap: 0
+  Try::Tiny: 0
 resources:
   homepage: http://github.com/thrig/App-MusicTools
   license: http://dev.perl.org/licenses/
   repository: http://github.com/thrig/App-MusicTools
-version: 1.03
+version: 1.04

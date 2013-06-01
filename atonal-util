@@ -29,6 +29,7 @@ use Music::Tension::Cope ();
 #use Music::Tension::PlompLevelt ();
 use Parse::Range qw/parse_range/;
 use Scalar::Util qw/looks_like_number/;
+use Try::Tiny;
 
 my $FORTE_NUMBER_RE = qr/[3-9]-[zZ]?\d{1,2}/;
 
@@ -280,7 +281,10 @@ sub combos {
   $Lyu->ignore_register(0);
   $Lyu->keep_state(1);
   $Lyu->sticky_state(1);
-  if ($relative) {
+  if ( defined $relative ) {
+    if ( $relative =~ m/^\d+$/ ) {
+      die "error: relative must be note name\n";
+    }
     $Lyu->mode('relative');
     $Lyu->prev_note($relative);
   } else {
@@ -321,7 +325,7 @@ sub combos {
     my $plus_delta  = 0;
     my $minus_delta = 0;
     my $errstr      = '';
-    eval {
+    try {
       # XXX if instead have $scala_file, then use $scala->get_concertpitch
       # hmm.. how do we know freq2pitch mapping? do not have appropriate code
       # for the scala input side of things - or get pitch using this method,
@@ -332,20 +336,20 @@ sub combos {
       $minus_pitch = $scala->freq2pitch($minus);
       $plus_delta  = $scala->pitch2freq($plus_pitch) - $plus;
       $minus_delta = $scala->pitch2freq($minus_pitch) - $minus;
-    };
-    if ($@) {
-      $errstr = "\t/!\\ pitch out of bounds";
     }
+    catch {
+      $errstr = "\t/!\\ pitch out of bounds";
+    };
 
     # best effort to get a note name, revert to pitch numbers if out of range
     if ( $Flag_Lyout and length $errstr == 0 ) {
-      eval {
+      try {
         $plus_pitch  = $Lyu->p2ly($plus_pitch);
         $minus_pitch = $Lyu->p2ly($minus_pitch);
-      };
-      if ($@) {
-        $errstr = "\t/!\\ ly note out of bounds";
       }
+      catch {
+        $errstr = "\t/!\\ ly note out of bounds";
+      };
     }
 
     printf "%.2f+%.2f = %.2f\t(%s error %.2f)%s\n", $freqs[0], $freqs[$i],
@@ -685,7 +689,10 @@ sub ly2pitch {
   $Lyu->ignore_register(0);
   $Lyu->keep_state(1);
   $Lyu->sticky_state(1);
-  if ($relative) {
+  if ( defined $relative ) {
+    if ( $relative =~ m/^\d+$/ ) {
+      die "error: relative must be note name\n";
+    }
     $Lyu->mode('relative');
     $Lyu->prev_note($relative);
   } else {
@@ -797,7 +804,10 @@ sub pitch2freq {
   $Lyu->ignore_register(0);
   $Lyu->keep_state(1);
   $Lyu->sticky_state(1);
-  if ($relative) {
+  if ( defined $relative ) {
+    if ( $relative =~ m/^\d+$/ ) {
+      die "error: relative must be note name\n";
+    }
     $Lyu->mode('relative');
     $Lyu->prev_note($relative);
   } else {
@@ -921,18 +931,17 @@ sub recipe {
   my $wps = [@$ps];
 
   open my $fh, '<', $rfile or die "could not open '$rfile': $!\n";
-  eval {
+  try {
     while ( my ( $method, @margs ) = split ' ', readline $fh ) {
       next if !$method or $method =~ m/^[\s#]/;
       chomp @margs;
       die "not a ", ref $Atu, " method" unless $Atu->can($method);
       $wps = $Atu->$method( @margs, $wps );
     }
-  };
-  if ($@) {
-    chomp $@;
-    die "recipe error at '$rfile' line $.: $@\n";
   }
+  catch {
+    die "recipe error at '$rfile' line $.: $_\n";
+  };
   emit_pitch_set( $wps, rs => $Flag_Record_Sep );
 }
 
