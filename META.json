@@ -53,7 +53,8 @@
             "Test::More" : "0",
             "Text::Roman" : "0",
             "Text::Wrap" : "0",
-            "Try::Tiny" : "0"
+            "Try::Tiny" : "0",
+            "perl" : "5.01"
          }
       }
    },
@@ -67,5 +68,5 @@
          "url" : "http://github.com/thrig/App-MusicTools"
       }
    },
-   "version" : "1.04"
+   "version" : "1.05"
 }
