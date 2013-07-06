@@ -40,7 +40,7 @@
             "IPC::Open3" : "0",
             "List::MoreUtils" : "0",
             "List::Util" : "0",
-            "Music::AtonalUtil" : "1",
+            "Music::AtonalUtil" : "1.04",
             "Music::Canon" : "0.5",
             "Music::Chord::Positions" : "0",
             "Music::LilyPondUtil" : "0.1",
@@ -68,5 +68,5 @@
          "url" : "http://github.com/thrig/App-MusicTools"
       }
    },
-   "version" : "1.07"
+   "version" : "1.08"
 }
