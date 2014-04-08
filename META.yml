@@ -7,8 +7,8 @@ build_requires:
 configure_requires:
   ExtUtils::MakeMaker: 0
 dynamic_config: 1
-generated_by: 'ExtUtils::MakeMaker version 6.64, CPAN::Meta::Converter version 2.120921'
-license: perl
+generated_by: 'ExtUtils::MakeMaker version 6.6302, CPAN::Meta::Converter version 2.120921'
+license: unknown
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
   version: 1.4
@@ -26,8 +26,8 @@ requires:
   IPC::Open3: 0
   JSON: 0
   List::Util: 0
-  Music::AtonalUtil: 1.04
-  Music::Canon: 0.5
+  Music::AtonalUtil: 1.07
+  Music::Canon: 0.54
   Music::Chord::Positions: 0
   Music::LilyPondUtil: 0.1
   Music::Scala: 0.84
@@ -45,4 +45,4 @@ resources:
   homepage: http://github.com/thrig/App-MusicTools
   license: http://dev.perl.org/licenses/
   repository: http://github.com/thrig/App-MusicTools
-version: 1.10
+version: 1.12

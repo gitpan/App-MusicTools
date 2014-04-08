@@ -4,9 +4,9 @@
       "Jeremy Mates <jmates@cpan.org>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "ExtUtils::MakeMaker version 6.64, CPAN::Meta::Converter version 2.120921",
+   "generated_by" : "ExtUtils::MakeMaker version 6.6302, CPAN::Meta::Converter version 2.120921",
    "license" : [
-      "perl_5"
+      "unknown"
    ],
    "meta-spec" : {
       "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
@@ -40,8 +40,8 @@
             "IPC::Open3" : "0",
             "JSON" : "0",
             "List::Util" : "0",
-            "Music::AtonalUtil" : "1.04",
-            "Music::Canon" : "0.5",
+            "Music::AtonalUtil" : "1.07",
+            "Music::Canon" : "0.54",
             "Music::Chord::Positions" : "0",
             "Music::LilyPondUtil" : "0.1",
             "Music::Scala" : "0.84",
@@ -68,5 +68,5 @@
          "url" : "http://github.com/thrig/App-MusicTools"
       }
    },
-   "version" : "1.10"
+   "version" : "1.12"
 }
