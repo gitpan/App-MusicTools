@@ -33,7 +33,6 @@
       "runtime" : {
          "requires" : {
             "Carp" : "0",
-            "File::Slurp" : "0",
             "File::Spec" : "0",
             "File::Temp" : "0",
             "Getopt::Long" : "0",
@@ -68,5 +67,5 @@
          "url" : "http://github.com/thrig/App-MusicTools"
       }
    },
-   "version" : "1.13"
+   "version" : "1.14"
 }
