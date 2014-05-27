@@ -3,45 +3,45 @@ abstract: 'command line utilities for music composition and analysis'
 author:
   - 'Jeremy Mates <jmates@cpan.org>'
 build_requires:
-  ExtUtils::MakeMaker: 0
+  ExtUtils::MakeMaker: '0'
 configure_requires:
-  ExtUtils::MakeMaker: 0
+  ExtUtils::MakeMaker: '0'
 dynamic_config: 1
 generated_by: 'ExtUtils::MakeMaker version 6.6302, CPAN::Meta::Converter version 2.120921'
 license: unknown
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
-  version: 1.4
+  version: '1.4'
 name: App-MusicTools
 no_index:
   directory:
     - t
     - inc
 requires:
-  Carp: 0
-  File::Spec: 0
-  File::Temp: 0
-  Getopt::Long: 0
-  IPC::Open3: 0
-  JSON: 0
-  List::Util: 0
-  Music::AtonalUtil: 1.07
-  Music::Canon: 0.54
-  Music::Chord::Positions: 0
-  Music::LilyPondUtil: 0.1
-  Music::Scala: 0.84
-  Music::Scales: 0
-  Music::Tempo: 0
-  Music::Tension: 0.6
-  Parse::Range: 0
-  Scalar::Util: 0
-  Test::More: 0
-  Text::Roman: 0
-  Text::Wrap: 0
-  Try::Tiny: 0
-  perl: 5.01
+  Carp: '0'
+  File::Spec: '0'
+  File::Temp: '0'
+  Getopt::Long: '0'
+  IPC::Open3: '0'
+  JSON: '0'
+  List::Util: '0'
+  Music::AtonalUtil: '1.07'
+  Music::Canon: '1'
+  Music::Chord::Positions: '0'
+  Music::LilyPondUtil: '0.1'
+  Music::Scala: '0.84'
+  Music::Scales: '0'
+  Music::Tempo: '0'
+  Music::Tension: '0.6'
+  Parse::Range: '0'
+  Scalar::Util: '0'
+  Test::More: '0'
+  Text::Roman: '0'
+  Text::Wrap: '0'
+  Try::Tiny: '0'
+  perl: '5.01'
 resources:
   homepage: http://github.com/thrig/App-MusicTools
   license: http://dev.perl.org/licenses/
   repository: http://github.com/thrig/App-MusicTools
-version: 1.14
+version: '1.15'
