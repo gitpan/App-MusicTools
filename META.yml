@@ -26,7 +26,7 @@ requires:
   JSON: '0'
   List::Util: '0'
   Music::AtonalUtil: '1.07'
-  Music::Canon: '1'
+  Music::Canon: '2'
   Music::Chord::Positions: '0'
   Music::LilyPondUtil: '0.1'
   Music::Scala: '0.84'
@@ -44,4 +44,4 @@ resources:
   homepage: http://github.com/thrig/App-MusicTools
   license: http://dev.perl.org/licenses/
   repository: http://github.com/thrig/App-MusicTools
-version: '1.16'
+version: '1.17'

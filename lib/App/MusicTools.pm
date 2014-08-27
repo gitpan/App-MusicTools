@@ -6,7 +6,7 @@ use 5.010000;
 use strict;
 use warnings;
 
-our $VERSION = '1.16';
+our $VERSION = '1.17';
 
 1;
 __END__
@@ -104,7 +104,7 @@ L<Music::LilyPondUtil>, L<Music::Tension>
 
 =head1 AUTHOR
 
-Jeremy Mates, E<lt>jmates@cpan.orgE<gt>
+thrig - Jeremy Mates (cpan:JMATES) C<< <jmates at cpan.org> >>
 
 =head1 COPYRIGHT AND LICENSE
 
